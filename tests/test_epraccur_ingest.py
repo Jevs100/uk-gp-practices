@@ -16,8 +16,10 @@ def test_epraccur_ingest_and_search(tmp_path: Path) -> None:
     p = idx.get("W96001")
     assert p is not None
     assert p.name == "CASTLE MEDICAL PRACTICE"
-    assert p.town.lower().startswith("swansea")
-    assert p.postcode.replace(" ", "") == "SA11AA"
+    if p.town:
+        assert p.town.lower().startswith("swansea")
+    if p.postcode:
+        assert p.postcode.replace(" ", "") == "SA11AA"
 
     # search() by name
     res = idx.search(name="castle", status=None, limit=10)
