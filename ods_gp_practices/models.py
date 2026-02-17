@@ -1,3 +1,5 @@
+"""Models representing GP practice data."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +20,5 @@ class Practice:
     postcode: Optional[str] = None
     town: Optional[str] = None
     status: Optional[str] = None
-
 
     raw: Optional[dict[str, Any]] = None

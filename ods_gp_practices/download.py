@@ -1,3 +1,5 @@
+"""Tools for downloading NHS ODS Data Search & Export (DSE) reports."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
