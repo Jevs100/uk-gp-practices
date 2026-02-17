@@ -58,22 +58,21 @@ class PracticeIndex:
         return True
 
     def update(self, report: str = DEFAULT_REPORT) -> None:
-        """
-        Download a report CSV and upsert into SQLite.
-        """
         csvf = csv_path(report)
         download_report(report=report, dest=csvf)
 
-        if report.lower() == "epraccur":
-            rows = read_csv_rows(csvf)
-            prepared = self._prepare_rows_epraccur(rows)
-        else:
-            raw_rows = read_csv_dicts(csvf)
-            prepared = self._prepare_rows(raw_rows)  # keep for later
-
+        # Ensure schema exists immediately
         con = connect(self.db_file)
         try:
             init_db(con)
+
+            if report.lower() == "epraccur":
+                rows = read_csv_rows(csvf)
+                prepared = self._prepare_rows_epraccur(rows)
+            else:
+                raw_rows = read_csv_dicts(csvf)
+                prepared = self._prepare_rows(raw_rows)
+
             upsert_practices(con, prepared)
         finally:
             con.close()
