@@ -38,6 +38,12 @@ class PracticeIndex:
         max_age: timedelta = DEFAULT_MAX_AGE,
     ) -> "PracticeIndex":
         idx = cls(db_file=default_db_path())
+        con = connect(idx.db_file)
+        try:
+            init_db(con)
+        finally:
+            con.close()
+
         idx.update_if_needed(report=report, max_age=max_age)
         return idx
 
