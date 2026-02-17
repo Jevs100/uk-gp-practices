@@ -109,6 +109,8 @@ class PracticeIndex:
     def _con(self) -> sqlite3.Connection:
         con = sqlite3.connect(str(self.db_file))
         con.row_factory = sqlite3.Row
+        # Ensure schema exists even if DB file is new
+        init_db(con)
         return con
 
     def get(self, organisation_code: str) -> Practice | None:
