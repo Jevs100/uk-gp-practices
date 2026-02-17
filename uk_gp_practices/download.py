@@ -49,7 +49,7 @@ def download_report(
             continue
 
         with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-            for attempt in range(1, retries + 2):
+            for attempt in range(1, retries + 2):  # retries + 1 initial attempt
                 try:
                     resp = client.get(base_url, params=params)
                     resp.raise_for_status()

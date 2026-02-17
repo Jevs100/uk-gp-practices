@@ -40,16 +40,6 @@ def init_db(con: sqlite3.Connection) -> None:
     con.commit()
 
 
-def read_csv(path: Path) -> list[dict[str, str]]:
-    """
-    Read a CSV into a list of dicts.
-
-    Uses utf-8-sig because NHS CSVs occasionally include a BOM.
-    """
-    with path.open("r", newline="", encoding="utf-8-sig") as f:
-        return list(csv.DictReader(f))
-
-
 def upsert_practices(
     con: sqlite3.Connection, rows: Iterable[dict[str, str | None]]
 ) -> None:

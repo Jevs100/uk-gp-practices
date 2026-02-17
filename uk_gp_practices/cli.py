@@ -25,6 +25,7 @@ def get(code: str, report: str = "epraccur") -> None:
     idx = PracticeIndex.auto_update(report=report)
     p = idx.get(code)
     if not p:
+        typer.echo(f"Practice not found: {code}", err=True)
         raise typer.Exit(code=1)
     typer.echo(json.dumps(p.raw or {}, indent=2))
 

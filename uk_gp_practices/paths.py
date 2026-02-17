@@ -28,4 +28,5 @@ def db_path() -> Path:
 
 def csv_path(report: str) -> Path:
     """Path for storing a downloaded report CSV file."""
-    return cache_dir() / f"{report}.csv"
+    safe = report.replace("/", "_").replace("\\", "_").replace("..", "_")
+    return cache_dir() / f"{safe}.csv"
