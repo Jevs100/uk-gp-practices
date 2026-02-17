@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "uk-gp-practices"
+version = "0.1.0"
+description = "Query UK GP practices (surgeries) via NHS ODS Data Search & Export CSV reports."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Joshua Evans" }]
+dependencies = [
+    "httpx>=0.27",
+    "platformdirs>=4.0",
+]
+
+[project.optional-dependencies]
+fuzzy = ["rapidfuzz>=3.0"]
+
+[project.scripts]
+uk-gp = "uk_gp_practices.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["uk_gp_practices"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
