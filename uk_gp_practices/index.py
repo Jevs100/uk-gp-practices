@@ -198,11 +198,10 @@ class PracticeIndex:
             return "".join(ch for ch in k.strip().lower() if ch.isalnum())
 
         def get_any(row: dict[str, str], *candidates: str) -> str:
-            # Build a normalized-key dict once per row
-            normed = {norm_key(k): v for k, v in row.items()}
+            normed = {norm_key(k): (v or "") for k, v in row.items()}
             for c in candidates:
                 v = normed.get(norm_key(c))
-                if v is not None:
+                if v:
                     return v
             return ""
 
@@ -213,52 +212,28 @@ class PracticeIndex:
                 r,
                 "Organisation Code",
                 "Org Code",
+                "OrgCode",
                 "ORG_CODE",
                 "ORGANISATION_CODE",
-                "CODE",
                 "ODS_CODE",
+                "CODE",
             ).strip()
 
             name = get_any(
                 r,
                 "Name",
                 "Organisation Name",
+                "Org Name",
                 "ORG_NAME",
                 "ORGANISATION_NAME",
                 "PRACTICE_NAME",
             ).strip()
 
             postcode = (
-                get_any(
-                    r,
-                    "Postcode",
-                    "POSTCODE",
-                    "POST_CODE",
-                    "ZIP",
-                ).strip()
-                or None
+                get_any(r, "Postcode", "POSTCODE", "POST_CODE", "ZIP").strip() or None
             )
-
-            town = (
-                get_any(
-                    r,
-                    "Town",
-                    "CITY",
-                    "POST_TOWN",
-                    "POSTTOWN",
-                ).strip()
-                or None
-            )
-
-            status = (
-                get_any(
-                    r,
-                    "Status",
-                    "STATUS",
-                    "CURRENT_STATUS",
-                ).strip()
-                or None
-            )
+            town = get_any(r, "Town", "POST_TOWN", "POSTTOWN", "CITY").strip() or None
+            status = get_any(r, "Status", "STATUS", "CURRENT_STATUS").strip() or None
 
             if not code or not name:
                 continue
