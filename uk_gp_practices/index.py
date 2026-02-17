@@ -8,7 +8,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from .db import connect, init_db, read_csv, upsert_practices
+from .db import connect, init_db, read_csv_dicts, read_csv_rows, upsert_practices
 from .download import download_report
 from .models import Practice
 from .normalise import normalize_name, normalize_postcode
@@ -64,8 +64,12 @@ class PracticeIndex:
         csvf = csv_path(report)
         download_report(report=report, dest=csvf)
 
-        raw_rows = read_csv(csvf)
-        prepared = self._prepare_rows(raw_rows)
+        if report.lower() == "epraccur":
+            rows = read_csv_rows(csvf)
+            prepared = self._prepare_rows_epraccur(rows)
+        else:
+            raw_rows = read_csv_dicts(csvf)
+            prepared = self._prepare_rows(raw_rows)  # keep for later
 
         con = connect(self.db_file)
         try:
@@ -202,6 +206,47 @@ class PracticeIndex:
             )
             town = get_any(r, "Town", "POST_TOWN", "POSTTOWN", "CITY").strip() or None
             status = get_any(r, "Status", "STATUS", "CURRENT_STATUS").strip() or None
+
+            if not code or not name:
+                continue
+
+            prepared.append(
+                {
+                    "organisation_code": code,
+                    "name": name,
+                    "name_norm": normalize_name(name),
+                    "postcode": postcode,
+                    "postcode_norm": normalize_postcode(postcode),
+                    "town": town,
+                    "status": status,
+                }
+            )
+
+        return prepared
+
+    def _prepare_rows_epraccur(self, rows: list[list[str]]) -> list[dict[str, Any]]:
+        """
+        Parse headerless epraccur CSV by positional columns.
+
+        Based on observed row format:
+        0 = organisation_code
+        1 = name
+        7 = town
+        9 = postcode
+        12 = status
+        """
+        prepared: list[dict[str, Any]] = []
+
+        for r in rows:
+            # Skip empty/short rows
+            if not r or len(r) < 13:
+                continue
+
+            code = (r[0] or "").strip()
+            name = (r[1] or "").strip()
+            town = (r[7] or "").strip() or None
+            postcode = (r[9] or "").strip() or None
+            status = (r[12] or "").strip() or None
 
             if not code or not name:
                 continue
