@@ -13,6 +13,9 @@ app = typer.Typer(help="Query UK GP practices (surgeries) via NHS ODS DSE CSV re
 
 @app.command()
 def update(report: str = "epraccur") -> None:
+    """
+    Download the latest report and update the local database.
+    """
     idx = PracticeIndex.auto_update(report=report)
     typer.echo(f"DB ready at: {idx.db_file}")
 
