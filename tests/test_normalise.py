@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 
 from uk_gp_practices.normalise import normalize_name, normalize_postcode
 
