@@ -64,24 +64,12 @@ class PracticeIndex:
         return True
 
     def update(self, report: str = DEFAULT_REPORT) -> None:
+        """
+        Download a report CSV and upsert into SQLite.
+        """
         csvf = csv_path(report)
         download_report(report=report, dest=csvf)
-
-        # Ensure schema exists immediately
-        con = connect(self.db_file)
-        try:
-            init_db(con)
-
-            if report.lower() == "epraccur":
-                rows = read_csv_rows(csvf)
-                prepared = self._prepare_rows_epraccur(rows)
-            else:
-                raw_rows = read_csv_dicts(csvf)
-                prepared = self._prepare_rows(raw_rows)
-
-            upsert_practices(con, prepared)
-        finally:
-            con.close()
+        self.load_csv(csvf, report=report)
 
     def _con(self) -> sqlite3.Connection:
         con = sqlite3.connect(str(self.db_file))
@@ -233,7 +221,7 @@ class PracticeIndex:
         """
         Parse headerless epraccur CSV by positional columns.
 
-        Based on observed row format:
+        Observed column mapping:
         0 = organisation_code
         1 = name
         7 = town
@@ -243,7 +231,6 @@ class PracticeIndex:
         prepared: list[dict[str, Any]] = []
 
         for r in rows:
-            # Skip empty/short rows
             if not r or len(r) < 13:
                 continue
 
@@ -269,3 +256,26 @@ class PracticeIndex:
             )
 
         return prepared
+
+    def load_csv(self, csv_file: str | Path, report: str = DEFAULT_REPORT) -> int:
+        """
+        Load a local CSV file into the SQLite database.
+
+        Returns the number of rows ingested.
+        """
+        csvf = Path(csv_file)
+
+        con = connect(self.db_file)
+        try:
+            init_db(con)
+
+            if report.lower() == "epraccur":
+                rows = read_csv_rows(csvf)
+                prepared = self._prepare_rows_epraccur(rows)
+            else:
+                raise ValueError(f"Unsupported report for local CSV load: {report}")
+
+            upsert_practices(con, prepared)
+            return len(prepared)
+        finally:
+            con.close()
