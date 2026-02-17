@@ -86,3 +86,15 @@ def upsert_practices(
         ],
     )
     con.commit()
+
+
+def read_csv_dicts(path: Path) -> list[dict[str, str]]:
+    """Read a normal headered CSV into dict rows."""
+    with path.open("r", newline="", encoding="utf-8-sig") as f:
+        return list(csv.DictReader(f))
+
+
+def read_csv_rows(path: Path) -> list[list[str]]:
+    """Read a CSV into raw rows (positional), for headerless exports."""
+    with path.open("r", newline="", encoding="utf-8-sig") as f:
+        return list(csv.reader(f))
