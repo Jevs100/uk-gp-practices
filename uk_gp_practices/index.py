@@ -8,7 +8,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from .db import connect, init_db, read_csv_dicts, read_csv_rows, upsert_practices
+from .db import connect, init_db, read_csv_rows, upsert_practices
 from .download import download_report
 from .models import Practice
 from .normalise import normalize_name, normalize_postcode
@@ -107,7 +107,7 @@ class PracticeIndex:
         name: str | None = None,
         postcode: str | None = None,
         town: str | None = None,
-        status: str | None = "Active",
+        status: str | None = None,
         limit: int = 25,
     ) -> list[Practice]:
         """
