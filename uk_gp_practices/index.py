@@ -65,39 +65,7 @@ class PracticeIndex:
         download_report(report=report, dest=csvf)
 
         raw_rows = read_csv(csvf)
-        prepared: list[dict[str, Any]] = []
-
-        # Defensive mapping because CSV headers vary a bit across reports.
-        for r in raw_rows:
-            code = (
-                r.get("Organisation Code")
-                or r.get("organisation_code")
-                or r.get("Org Code")
-                or ""
-            ).strip()
-            name = (
-                r.get("Name") or r.get("Organisation Name") or r.get("name") or ""
-            ).strip()
-            postcode = (r.get("Postcode") or r.get("postcode") or "").strip() or None
-            town = (
-                r.get("Town") or r.get("town") or r.get("City") or ""
-            ).strip() or None
-            status = (r.get("Status") or r.get("status") or "").strip() or None
-
-            if not code or not name:
-                continue
-
-            prepared.append(
-                {
-                    "organisation_code": code,
-                    "name": name,
-                    "name_norm": normalize_name(name),
-                    "postcode": postcode,
-                    "postcode_norm": normalize_postcode(postcode),
-                    "town": town,
-                    "status": status,
-                }
-            )
+        prepared = self._prepare_rows(raw_rows)
 
         con = connect(self.db_file)
         try:
