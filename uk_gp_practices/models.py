@@ -17,8 +17,8 @@ class Practice:
     organisation_code: str
     name: str
 
-    postcode: str
-    town: str
-    status: str
+    postcode: str | None
+    town: str | None
+    status: str | None
 
     raw: Optional[dict[str, Any]] = None

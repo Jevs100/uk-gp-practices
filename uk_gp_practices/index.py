@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
@@ -18,6 +18,20 @@ from .paths import csv_path, db_path as default_db_path
 DEFAULT_REPORT = "epraccur"
 DEFAULT_MAX_AGE = timedelta(days=1)
 
+_INTERNAL_COLUMNS = frozenset({"name_norm", "postcode_norm"})
+
+
+def _row_to_practice(row: sqlite3.Row) -> Practice:
+    raw = {k: row[k] for k in row.keys() if k not in _INTERNAL_COLUMNS}
+    return Practice(
+        organisation_code=row["organisation_code"],
+        name=row["name"],
+        postcode=row["postcode"],
+        town=row["town"],
+        status=row["status"],
+        raw=raw,
+    )
+
 
 @dataclass(slots=True)
 class PracticeIndex:
@@ -27,9 +41,15 @@ class PracticeIndex:
     Backed by:
       - downloaded NHS ODS DSE CSV report(s)
       - local SQLite database for fast lookups
+
+    Can be used as a context manager::
+
+        with PracticeIndex.auto_update() as idx:
+            practice = idx.get("A81001")
     """
 
     db_file: Path
+    _con_cache: sqlite3.Connection | None = field(default=None, repr=False)
 
     @classmethod
     def auto_update(
@@ -38,14 +58,32 @@ class PracticeIndex:
         max_age: timedelta = DEFAULT_MAX_AGE,
     ) -> "PracticeIndex":
         idx = cls(db_file=default_db_path())
-        con = connect(idx.db_file)
-        try:
-            init_db(con)
-        finally:
-            con.close()
-
+        idx._ensure_schema()
         idx.update_if_needed(report=report, max_age=max_age)
         return idx
+
+    def _ensure_schema(self) -> None:
+        con = self._con()
+        init_db(con)
+
+    def _con(self) -> sqlite3.Connection:
+        if self._con_cache is None:
+            con = connect(self.db_file)
+            con.row_factory = sqlite3.Row
+            self._con_cache = con
+        return self._con_cache
+
+    def close(self) -> None:
+        """Close the underlying database connection."""
+        if self._con_cache is not None:
+            self._con_cache.close()
+            self._con_cache = None
+
+    def __enter__(self) -> "PracticeIndex":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def update_if_needed(
         self, report: str = DEFAULT_REPORT, max_age: timedelta = DEFAULT_MAX_AGE
@@ -71,36 +109,19 @@ class PracticeIndex:
         download_report(report=report, dest=csvf)
         self.load_csv(csvf, report=report)
 
-    def _con(self) -> sqlite3.Connection:
-        con = sqlite3.connect(str(self.db_file))
-        con.row_factory = sqlite3.Row
-        # Ensure schema exists even if DB file is new
-        init_db(con)
-        return con
-
     def get(self, organisation_code: str) -> Practice | None:
         """
         Fetch a single practice by its ODS organisation code.
         """
         code = organisation_code.strip()
         con = self._con()
-        try:
-            row = con.execute(
-                "SELECT * FROM practices WHERE organisation_code = ?",
-                (code,),
-            ).fetchone()
-            if not row:
-                return None
-            return Practice(
-                organisation_code=row["organisation_code"],
-                name=row["name"],
-                postcode=row["postcode"],
-                town=row["town"],
-                status=row["status"],
-                raw=dict(row),
-            )
-        finally:
-            con.close()
+        row = con.execute(
+            "SELECT * FROM practices WHERE organisation_code = ?",
+            (code,),
+        ).fetchone()
+        if not row:
+            return None
+        return _row_to_practice(row)
 
     def search(
         self,
@@ -142,80 +163,8 @@ class PracticeIndex:
         params.append(int(limit))
 
         con = self._con()
-        try:
-            rows = con.execute(sql, params).fetchall()
-            return [
-                Practice(
-                    organisation_code=r["organisation_code"],
-                    name=r["name"],
-                    postcode=r["postcode"],
-                    town=r["town"],
-                    status=r["status"],
-                    raw=dict(r),
-                )
-                for r in rows
-            ]
-        finally:
-            con.close()
-
-    def _prepare_rows(self, raw_rows: list[dict[str, str]]) -> list[dict[str, Any]]:
-        def norm_key(k: str) -> str:
-            return "".join(ch for ch in k.strip().lower() if ch.isalnum())
-
-        def get_any(row: dict[str, str], *candidates: str) -> str:
-            normed = {norm_key(k): (v or "") for k, v in row.items()}
-            for c in candidates:
-                v = normed.get(norm_key(c))
-                if v:
-                    return v
-            return ""
-
-        prepared: list[dict[str, Any]] = []
-
-        for r in raw_rows:
-            code = get_any(
-                r,
-                "Organisation Code",
-                "Org Code",
-                "OrgCode",
-                "ORG_CODE",
-                "ORGANISATION_CODE",
-                "ODS_CODE",
-                "CODE",
-            ).strip()
-
-            name = get_any(
-                r,
-                "Name",
-                "Organisation Name",
-                "Org Name",
-                "ORG_NAME",
-                "ORGANISATION_NAME",
-                "PRACTICE_NAME",
-            ).strip()
-
-            postcode = (
-                get_any(r, "Postcode", "POSTCODE", "POST_CODE", "ZIP").strip() or None
-            )
-            town = get_any(r, "Town", "POST_TOWN", "POSTTOWN", "CITY").strip() or None
-            status = get_any(r, "Status", "STATUS", "CURRENT_STATUS").strip() or None
-
-            if not code or not name:
-                continue
-
-            prepared.append(
-                {
-                    "organisation_code": code,
-                    "name": name,
-                    "name_norm": normalize_name(name),
-                    "postcode": postcode,
-                    "postcode_norm": normalize_postcode(postcode),
-                    "town": town,
-                    "status": status,
-                }
-            )
-
-        return prepared
+        rows = con.execute(sql, params).fetchall()
+        return [_row_to_practice(r) for r in rows]
 
     def _prepare_rows_epraccur(self, rows: list[list[str]]) -> list[dict[str, Any]]:
         """
@@ -264,18 +213,14 @@ class PracticeIndex:
         Returns the number of rows ingested.
         """
         csvf = Path(csv_file)
+        con = self._con()
+        init_db(con)
 
-        con = connect(self.db_file)
-        try:
-            init_db(con)
+        if report.lower() == "epraccur":
+            rows = read_csv_rows(csvf)
+            prepared = self._prepare_rows_epraccur(rows)
+        else:
+            raise ValueError(f"Unsupported report for local CSV load: {report}")
 
-            if report.lower() == "epraccur":
-                rows = read_csv_rows(csvf)
-                prepared = self._prepare_rows_epraccur(rows)
-            else:
-                raise ValueError(f"Unsupported report for local CSV load: {report}")
-
-            upsert_practices(con, prepared)
-            return len(prepared)
-        finally:
-            con.close()
+        upsert_practices(con, prepared)
+        return len(prepared)
