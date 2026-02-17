@@ -190,3 +190,87 @@ class PracticeIndex:
             ]
         finally:
             con.close()
+
+    def _prepare_rows(self, raw_rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+        def norm_key(k: str) -> str:
+            return "".join(ch for ch in k.strip().lower() if ch.isalnum())
+
+        def get_any(row: dict[str, str], *candidates: str) -> str:
+            # Build a normalized-key dict once per row
+            normed = {norm_key(k): v for k, v in row.items()}
+            for c in candidates:
+                v = normed.get(norm_key(c))
+                if v is not None:
+                    return v
+            return ""
+
+        prepared: list[dict[str, Any]] = []
+
+        for r in raw_rows:
+            code = get_any(
+                r,
+                "Organisation Code",
+                "Org Code",
+                "ORG_CODE",
+                "ORGANISATION_CODE",
+                "CODE",
+                "ODS_CODE",
+            ).strip()
+
+            name = get_any(
+                r,
+                "Name",
+                "Organisation Name",
+                "ORG_NAME",
+                "ORGANISATION_NAME",
+                "PRACTICE_NAME",
+            ).strip()
+
+            postcode = (
+                get_any(
+                    r,
+                    "Postcode",
+                    "POSTCODE",
+                    "POST_CODE",
+                    "ZIP",
+                ).strip()
+                or None
+            )
+
+            town = (
+                get_any(
+                    r,
+                    "Town",
+                    "CITY",
+                    "POST_TOWN",
+                    "POSTTOWN",
+                ).strip()
+                or None
+            )
+
+            status = (
+                get_any(
+                    r,
+                    "Status",
+                    "STATUS",
+                    "CURRENT_STATUS",
+                ).strip()
+                or None
+            )
+
+            if not code or not name:
+                continue
+
+            prepared.append(
+                {
+                    "organisation_code": code,
+                    "name": name,
+                    "name_norm": normalize_name(name),
+                    "postcode": postcode,
+                    "postcode_norm": normalize_postcode(postcode),
+                    "town": town,
+                    "status": status,
+                }
+            )
+
+        return prepared
