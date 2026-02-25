@@ -9,8 +9,10 @@ from rich.console import Console
 from rich.progress import (
     BarColumn,
     DownloadColumn,
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
+    TaskProgressColumn,
     TextColumn,
     TimeRemainingColumn,
     TransferSpeedColumn,
@@ -54,10 +56,18 @@ def update(report: str = "epraccur") -> None:
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
         console=console,
     ) as progress:
         task = progress.add_task("Loading into database...", total=None)
-        idx.load_csv(csvf, report=report)
+
+        def on_db_progress(completed: int, total: int) -> None:
+            progress.update(task, completed=completed, total=total)
+
+        idx.load_csv(csvf, report=report, on_progress=on_db_progress)
 
     console.print(f"[green]✓[/green] Done — DB ready at: {idx.db_file}")
 

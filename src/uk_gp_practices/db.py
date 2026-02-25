@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Iterable
 
 
 PRACTICES_TABLE_SQL = """
@@ -40,41 +40,59 @@ def init_db(con: sqlite3.Connection) -> None:
     con.commit()
 
 
+_UPSERT_SQL = """
+INSERT INTO practices (
+  organisation_code, name, name_norm, postcode, postcode_norm, town, status
+) VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(organisation_code) DO UPDATE SET
+  name=excluded.name,
+  name_norm=excluded.name_norm,
+  postcode=excluded.postcode,
+  postcode_norm=excluded.postcode_norm,
+  town=excluded.town,
+  status=excluded.status
+"""
+
+
 def upsert_practices(
-    con: sqlite3.Connection, rows: Iterable[dict[str, str | None]]
+    con: sqlite3.Connection,
+    rows: Iterable[dict[str, str | None]],
+    on_progress: Callable[[int, int], None] | None = None,
+    chunk_size: int = 500,
 ) -> None:
     """
     Upsert practice rows into sqlite.
 
     Expected keys in each row:
       organisation_code, name, name_norm, postcode, postcode_norm, town, status
+
+    on_progress: optional callback(rows_completed, total_rows)
     """
-    con.executemany(
-        """
-        INSERT INTO practices (
-          organisation_code, name, name_norm, postcode, postcode_norm, town, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(organisation_code) DO UPDATE SET
-          name=excluded.name,
-          name_norm=excluded.name_norm,
-          postcode=excluded.postcode,
-          postcode_norm=excluded.postcode_norm,
-          town=excluded.town,
-          status=excluded.status
-        """,
-        [
-            (
-                r.get("organisation_code"),
-                r.get("name"),
-                r.get("name_norm"),
-                r.get("postcode"),
-                r.get("postcode_norm"),
-                r.get("town"),
-                r.get("status"),
-            )
-            for r in rows
-        ],
-    )
+    all_rows = list(rows)
+    total = len(all_rows)
+    completed = 0
+
+    for i in range(0, total, chunk_size):
+        chunk = all_rows[i : i + chunk_size]
+        con.executemany(
+            _UPSERT_SQL,
+            [
+                (
+                    r.get("organisation_code"),
+                    r.get("name"),
+                    r.get("name_norm"),
+                    r.get("postcode"),
+                    r.get("postcode_norm"),
+                    r.get("town"),
+                    r.get("status"),
+                )
+                for r in chunk
+            ],
+        )
+        completed += len(chunk)
+        if on_progress is not None:
+            on_progress(completed, total)
+
     con.commit()
 
 

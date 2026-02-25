@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -206,10 +207,16 @@ class PracticeIndex:
 
         return prepared
 
-    def load_csv(self, csv_file: str | Path, report: str = DEFAULT_REPORT) -> int:
+    def load_csv(
+        self,
+        csv_file: str | Path,
+        report: str = DEFAULT_REPORT,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> int:
         """
         Load a local CSV file into the SQLite database.
 
+        on_progress: optional callback(rows_completed, total_rows)
         Returns the number of rows ingested.
         """
         csvf = Path(csv_file)
@@ -222,5 +229,5 @@ class PracticeIndex:
         else:
             raise ValueError(f"Unsupported report for local CSV load: {report}")
 
-        upsert_practices(con, prepared)
+        upsert_practices(con, prepared, on_progress=on_progress)
         return len(prepared)
