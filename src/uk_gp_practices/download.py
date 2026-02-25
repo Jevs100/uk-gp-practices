@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 import os
@@ -29,9 +30,12 @@ def download_report(
     timeout: float = 60.0,
     retries: int = 3,
     backoff_seconds: float = 0.6,
+    on_progress: Callable[[int, int | None], None] | None = None,
 ) -> DownloadResult:
     """
     Download an NHS ODS Data Search & Export predefined report as a CSV.
+
+    on_progress: optional callback(bytes_downloaded, total_bytes_or_None)
 
     Override endpoint (single URL) with:
         UK_GP_PRACTICES_DSE_URL
@@ -55,6 +59,8 @@ def download_report(
                     resp.raise_for_status()
                     data = resp.content
                     dest.write_bytes(data)
+                    if on_progress is not None:
+                        on_progress(len(data), len(data))
                     return DownloadResult(
                         report=report,
                         path=dest,

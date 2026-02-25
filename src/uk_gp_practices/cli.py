@@ -5,10 +5,24 @@ from __future__ import annotations
 import json
 import typer
 
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
+
+from .download import download_report
 from .index import PracticeIndex
+from .paths import csv_path, db_path as default_db_path
 
 
 app = typer.Typer(help="Query UK GP practices (surgeries) via NHS ODS DSE CSV reports.")
+console = Console()
 
 
 @app.command()
@@ -16,8 +30,36 @@ def update(report: str = "epraccur") -> None:
     """
     Download the latest report and update the local database.
     """
-    idx = PracticeIndex.auto_update(report=report)
-    typer.echo(f"DB ready at: {idx.db_file}")
+    idx = PracticeIndex(db_file=default_db_path())
+    idx._ensure_schema()
+    csvf = csv_path(report)
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task(f"Downloading {report}...", total=None)
+
+        def on_progress(completed: int, total: int | None) -> None:
+            progress.update(task, completed=completed, total=total)
+
+        result = download_report(report=report, dest=csvf, on_progress=on_progress)
+        progress.update(task, completed=result.bytes_written, total=result.bytes_written)
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Loading into database...", total=None)
+        idx.load_csv(csvf, report=report)
+
+    console.print(f"[green]✓[/green] Done — DB ready at: {idx.db_file}")
 
 
 @app.command()
