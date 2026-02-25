@@ -33,7 +33,6 @@ def update(report: str = "epraccur") -> None:
     Download the latest report and update the local database.
     """
     idx = PracticeIndex(db_file=default_db_path())
-    idx._ensure_schema()
     csvf = csv_path(report)
 
     with Progress(
@@ -51,7 +50,9 @@ def update(report: str = "epraccur") -> None:
             progress.update(task, completed=completed, total=total)
 
         result = download_report(report=report, dest=csvf, on_progress=on_progress)
-        progress.update(task, completed=result.bytes_written, total=result.bytes_written)
+        progress.update(
+            task, completed=result.bytes_written, total=result.bytes_written
+        )
 
     with Progress(
         SpinnerColumn(),
