@@ -85,3 +85,52 @@ def download_report(
         f"Failed to download report '{report}'. Tried: {', '.join([u for u in candidate_urls if u])}. "
         f"Last error: {last_exc!r}"
     )
+
+
+def download_url(
+    url: str,
+    dest: Path,
+    timeout: float = 60.0,
+    retries: int = 3,
+    backoff_seconds: float = 0.6,
+    on_progress: Callable[[int, int | None], None] | None = None,
+) -> DownloadResult:
+    """
+    Download an arbitrary URL to dest.
+
+    on_progress: optional callback(bytes_downloaded, total_bytes_or_None)
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    last_exc: Exception | None = None
+
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+        for attempt in range(1, retries + 2):
+            try:
+                resp = client.get(url)
+                resp.raise_for_status()
+                data = resp.content
+                dest.write_bytes(data)
+                if on_progress is not None:
+                    on_progress(len(data), len(data))
+                return DownloadResult(
+                    report=url,
+                    path=dest,
+                    bytes_written=len(data),
+                    url=str(resp.url),
+                )
+            except (
+                httpx.ConnectError,
+                httpx.ReadTimeout,
+                httpx.RemoteProtocolError,
+                httpx.NetworkError,
+            ) as exc:
+                last_exc = exc
+                time.sleep(backoff_seconds * (2 ** (attempt - 1)))
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(
+                    f"Failed to download URL '{url}': {exc.response.status_code}"
+                ) from exc
+
+    raise RuntimeError(
+        f"Failed to download URL '{url}'. Last error: {last_exc!r}"
+    )
