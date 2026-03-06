@@ -20,5 +20,6 @@ class Practice:
     postcode: str | None
     town: str | None
     status: str | None
+    nation: str | None = None
 
     raw: Optional[dict[str, Any]] = None

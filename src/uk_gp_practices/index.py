@@ -9,14 +9,12 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from .db import connect, init_db, read_csv_rows, upsert_practices
-from .download import download_report
+from .db import connect, init_db, upsert_practices
 from .models import Practice
-from .normalise import normalize_name, normalize_postcode
 from .paths import csv_path, db_path as default_db_path
+from .sources.base import Source
 
 
-DEFAULT_REPORT = "epraccur"
 DEFAULT_MAX_AGE = timedelta(days=1)
 
 _INTERNAL_COLUMNS = frozenset({"name_norm", "postcode_norm"})
@@ -30,6 +28,7 @@ def _row_to_practice(row: sqlite3.Row) -> Practice:
         postcode=row["postcode"],
         town=row["town"],
         status=row["status"],
+        nation=row["nation"],
         raw=raw,
     )
 
@@ -40,7 +39,7 @@ class PracticeIndex:
     Main query interface for GP practice data.
 
     Backed by:
-      - downloaded NHS ODS DSE CSV report(s)
+      - downloaded source CSV files (one per nation)
       - local SQLite database for fast lookups
 
     Can be used as a context manager::
@@ -55,17 +54,22 @@ class PracticeIndex:
     @classmethod
     def auto_update(
         cls,
-        report: str = DEFAULT_REPORT,
+        sources: list[Source] | None = None,
         max_age: timedelta = DEFAULT_MAX_AGE,
     ) -> "PracticeIndex":
+        from .sources import ALL_SOURCES
+
+        if sources is None:
+            sources = ALL_SOURCES  # type: ignore[assignment]
+
         idx = cls(db_file=default_db_path())
         idx._ensure_schema()
-        idx.update_if_needed(report=report, max_age=max_age)
+        for source in sources:
+            idx.update_if_needed(source=source, max_age=max_age)
         return idx
 
     def _ensure_schema(self) -> None:
-        con = self._con()
-        init_db(con)
+        init_db(self._con())
 
     def _con(self) -> sqlite3.Connection:
         if self._con_cache is None:
@@ -87,33 +91,62 @@ class PracticeIndex:
         self.close()
 
     def update_if_needed(
-        self, report: str = DEFAULT_REPORT, max_age: timedelta = DEFAULT_MAX_AGE
+        self, source: Source, max_age: timedelta = DEFAULT_MAX_AGE
     ) -> bool:
         """
         Download + rebuild if the CSV is missing or older than max_age.
         Returns True if an update happened.
         """
-        csvf = csv_path(report)
+        csvf = csv_path(source.nation)
         if csvf.exists():
             mtime = datetime.fromtimestamp(csvf.stat().st_mtime, tz=timezone.utc)
             if datetime.now(tz=timezone.utc) - mtime < max_age:
                 return False
 
-        self.update(report=report)
+        self.update(source=source)
         return True
 
-    def update(self, report: str = DEFAULT_REPORT) -> None:
+    def update(self, source: Source) -> None:
+        """Download a source CSV and upsert into SQLite."""
+        csvf = csv_path(source.nation)
+        source.download(csvf)
+        self.load_source(csvf, source=source)
+
+    def load_source(
+        self,
+        csv_file: str | Path,
+        source: Source,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> int:
         """
-        Download a report CSV and upsert into SQLite.
+        Parse a local CSV via the given source and upsert into SQLite.
+
+        on_progress: optional callback(rows_completed, total_rows)
+        Returns the number of rows ingested.
         """
-        csvf = csv_path(report)
-        download_report(report=report, dest=csvf)
-        self.load_csv(csvf, report=report)
+        con = self._con()
+        init_db(con)
+        prepared = source.parse(Path(csv_file))
+        upsert_practices(con, prepared, on_progress=on_progress)
+        return len(prepared)
+
+    def load_csv(
+        self,
+        csv_file: str | Path,
+        report: str = "epraccur",
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> int:
+        """
+        Backward-compatible wrapper — loads an epraccur CSV using EnglandSource.
+
+        Prefer load_source() for new code.
+        """
+        from .sources.england import EnglandSource
+
+        return self.load_source(csv_file, source=EnglandSource(), on_progress=on_progress)
 
     def get(self, organisation_code: str) -> Practice | None:
-        """
-        Fetch a single practice by its ODS organisation code.
-        """
+        """Fetch a single practice by its ODS organisation code."""
         code = organisation_code.strip()
         con = self._con()
         row = con.execute(
@@ -130,16 +163,18 @@ class PracticeIndex:
         postcode: str | None = None,
         town: str | None = None,
         status: str | None = None,
+        nation: str | None = None,
         limit: int = 25,
     ) -> list[Practice]:
-        """
-        Search practices by name and/or postcode and/or town.
+        """Search practices by name, postcode, town, and/or nation."""
+        from .normalise import normalize_name, normalize_postcode
 
-        Note: this is simple LIKE matching for v0.1.
-        Fuzzy matching can come later as an optional dependency.
-        """
         clauses: list[str] = []
-        params: list[object] = []
+        params: list[Any] = []
+
+        if nation:
+            clauses.append("nation = ?")
+            params.append(nation.lower())
 
         if status:
             clauses.append("status = ?")
@@ -166,68 +201,3 @@ class PracticeIndex:
         con = self._con()
         rows = con.execute(sql, params).fetchall()
         return [_row_to_practice(r) for r in rows]
-
-    def _prepare_rows_epraccur(self, rows: list[list[str]]) -> list[dict[str, Any]]:
-        """
-        Parse headerless epraccur CSV by positional columns.
-
-        Observed column mapping:
-        0 = organisation_code
-        1 = name
-        7 = town
-        9 = postcode
-        12 = status
-        """
-        prepared: list[dict[str, Any]] = []
-
-        for r in rows:
-            if not r or len(r) < 13:
-                continue
-
-            code = (r[0] or "").strip()
-            name = (r[1] or "").strip()
-            town = (r[7] or "").strip() or None
-            postcode = (r[9] or "").strip() or None
-            status = (r[12] or "").strip() or None
-
-            if not code or not name:
-                continue
-
-            prepared.append(
-                {
-                    "organisation_code": code,
-                    "name": name,
-                    "name_norm": normalize_name(name),
-                    "postcode": postcode,
-                    "postcode_norm": normalize_postcode(postcode),
-                    "town": town,
-                    "status": status,
-                }
-            )
-
-        return prepared
-
-    def load_csv(
-        self,
-        csv_file: str | Path,
-        report: str = DEFAULT_REPORT,
-        on_progress: Callable[[int, int], None] | None = None,
-    ) -> int:
-        """
-        Load a local CSV file into the SQLite database.
-
-        on_progress: optional callback(rows_completed, total_rows)
-        Returns the number of rows ingested.
-        """
-        csvf = Path(csv_file)
-        con = self._con()
-        init_db(con)
-
-        if report.lower() == "epraccur":
-            rows = read_csv_rows(csvf)
-            prepared = self._prepare_rows_epraccur(rows)
-        else:
-            raise ValueError(f"Unsupported report for local CSV load: {report}")
-
-        upsert_practices(con, prepared, on_progress=on_progress)
-        return len(prepared)

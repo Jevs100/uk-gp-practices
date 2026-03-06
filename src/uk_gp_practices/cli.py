@@ -18,9 +18,9 @@ from rich.progress import (
     TransferSpeedColumn,
 )
 
-from .download import download_report
 from .index import PracticeIndex
 from .paths import csv_path, db_path as default_db_path
+from .sources import ALL_SOURCES
 
 
 app = typer.Typer(help="Query UK GP practices (surgeries) via NHS ODS DSE CSV reports.")
@@ -28,57 +28,57 @@ console = Console()
 
 
 @app.command()
-def update(report: str = "epraccur") -> None:
+def update() -> None:
     """
-    Download the latest report and update the local database.
+    Download the latest data for all nations and update the local database.
     """
     idx = PracticeIndex(db_file=default_db_path())
-    csvf = csv_path(report)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        DownloadColumn(),
-        TransferSpeedColumn(),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task(f"Downloading {report}...", total=None)
+    for source in ALL_SOURCES:
+        csvf = csv_path(source.nation)
 
-        def on_progress(completed: int, total: int | None) -> None:
-            progress.update(task, completed=completed, total=total)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(f"Downloading {source.nation}...", total=None)
 
-        result = download_report(report=report, dest=csvf, on_progress=on_progress)
-        progress.update(
-            task, completed=result.bytes_written, total=result.bytes_written
-        )
+            def on_progress(completed: int, total: int | None, _t=task) -> None:
+                progress.update(_t, completed=completed, total=total)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        MofNCompleteColumn(),
-        TaskProgressColumn(),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Loading into database...", total=None)
+            result = source.download(dest=csvf, on_progress=on_progress)
+            progress.update(task, completed=result.bytes_written, total=result.bytes_written)
 
-        def on_db_progress(completed: int, total: int) -> None:
-            progress.update(task, completed=completed, total=total)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(f"Loading {source.nation} into database...", total=None)
 
-        idx.load_csv(csvf, report=report, on_progress=on_db_progress)
+            def on_db_progress(completed: int, total: int, _t=task) -> None:
+                progress.update(_t, completed=completed, total=total)
+
+            idx.load_source(csvf, source=source, on_progress=on_db_progress)
 
     console.print(f"[green]✓[/green] Done — DB ready at: {idx.db_file}")
 
 
 @app.command()
-def get(code: str, report: str = "epraccur") -> None:
+def get(code: str) -> None:
     """
     Get a single practice by organisation code (ODS code).
     """
-    idx = PracticeIndex.auto_update(report=report)
+    idx = PracticeIndex.auto_update()
     p = idx.get(code)
     if not p:
         typer.echo(f"Practice not found: {code}", err=True)
@@ -96,18 +96,21 @@ def search(
     status: str = typer.Option(
         "", help="Filter by status (e.g. ACTIVE). Leave blank for any."
     ),
+    nation: str = typer.Option(
+        "", help="Filter by nation (e.g. england, scotland, northern_ireland)."
+    ),
     limit: int = typer.Option(10, help="Max results."),
-    report: str = typer.Option("epraccur", help="ODS report code."),
 ) -> None:
     """
-    Search practices by name/postcode/town.
+    Search practices by name/postcode/town/nation.
     """
-    idx = PracticeIndex.auto_update(report=report)
+    idx = PracticeIndex.auto_update()
     res = idx.search(
         name=name or None,
         postcode=postcode or None,
         town=town or None,
         status=status or None,
+        nation=nation or None,
         limit=limit,
     )
     typer.echo(json.dumps([r.raw for r in res], indent=2))
