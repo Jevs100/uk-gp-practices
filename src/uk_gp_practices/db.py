@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS practices (
   postcode TEXT,
   postcode_norm TEXT,
   town TEXT,
-  status TEXT
+  status TEXT,
+  nation TEXT
 );
 """
 
@@ -33,24 +34,34 @@ def connect(db_path: Path) -> sqlite3.Connection:
     return con
 
 
+def _migrate(con: sqlite3.Connection) -> None:
+    """Apply any schema migrations needed for existing databases."""
+    existing = {row[1] for row in con.execute("PRAGMA table_info(practices)")}
+    if "nation" not in existing:
+        con.execute("ALTER TABLE practices ADD COLUMN nation TEXT")
+        con.commit()
+
+
 def init_db(con: sqlite3.Connection) -> None:
     con.execute(PRACTICES_TABLE_SQL)
     for stmt in INDEXES_SQL:
         con.execute(stmt)
     con.commit()
+    _migrate(con)
 
 
 _UPSERT_SQL = """
 INSERT INTO practices (
-  organisation_code, name, name_norm, postcode, postcode_norm, town, status
-) VALUES (?, ?, ?, ?, ?, ?, ?)
+  organisation_code, name, name_norm, postcode, postcode_norm, town, status, nation
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(organisation_code) DO UPDATE SET
   name=excluded.name,
   name_norm=excluded.name_norm,
   postcode=excluded.postcode,
   postcode_norm=excluded.postcode_norm,
   town=excluded.town,
-  status=excluded.status
+  status=excluded.status,
+  nation=excluded.nation
 """
 
 
@@ -64,7 +75,7 @@ def upsert_practices(
     Upsert practice rows into sqlite.
 
     Expected keys in each row:
-      organisation_code, name, name_norm, postcode, postcode_norm, town, status
+      organisation_code, name, name_norm, postcode, postcode_norm, town, status, nation
 
     on_progress: optional callback(rows_completed, total_rows)
     """
@@ -85,6 +96,7 @@ def upsert_practices(
                     r.get("postcode_norm"),
                     r.get("town"),
                     r.get("status"),
+                    r.get("nation"),
                 )
                 for r in chunk
             ],
