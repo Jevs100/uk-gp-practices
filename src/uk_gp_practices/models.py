@@ -1,4 +1,4 @@
-"""Models representing GP practice data."""
+"""Data models for normalized GP practice records."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from typing import Optional, Any
 @dataclass(frozen=True, slots=True)
 class Practice:
     """
-    Represents a UK GP Practice (surgery) record.
+    Normalized GP practice record returned by PracticeIndex queries.
 
-    This is based on NHS ODS Data Search & Export (DSE) CSV reports such as `epraccur`.
+    raw contains the database row fields used to build the normalized model.
     """
 
     organisation_code: str

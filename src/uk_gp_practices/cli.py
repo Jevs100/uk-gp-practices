@@ -1,4 +1,4 @@
-"""Typer CLI for querying UK GP practices (surgeries) via NHS ODS DSE CSV reports."""
+"""Command line interface for downloading and querying UK GP practice data."""
 
 from __future__ import annotations
 
@@ -23,14 +23,14 @@ from .paths import csv_path, db_path as default_db_path
 from .sources import ALL_SOURCES
 
 
-app = typer.Typer(help="Query UK GP practices (surgeries) via NHS ODS DSE CSV reports.")
+app = typer.Typer(help="Query UK GP practices (surgeries) from cached public NHS data.")
 console = Console()
 
 
 @app.command()
 def update() -> None:
     """
-    Download the latest data for all nations and update the local database.
+    Download all supported sources and refresh the local SQLite database.
     """
     idx = PracticeIndex(db_file=default_db_path())
 
@@ -76,7 +76,7 @@ def update() -> None:
 @app.command()
 def get(code: str) -> None:
     """
-    Get a single practice by organisation code (ODS code).
+    Print a single practice record by organisation code.
     """
     idx = PracticeIndex.auto_update()
     p = idx.get(code)
@@ -102,7 +102,7 @@ def search(
     limit: int = typer.Option(10, help="Max results."),
 ) -> None:
     """
-    Search practices by name/postcode/town/nation.
+    Print practice records matching the supplied filters.
     """
     idx = PracticeIndex.auto_update()
     res = idx.search(

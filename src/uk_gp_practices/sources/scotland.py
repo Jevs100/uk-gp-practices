@@ -1,4 +1,4 @@
-"""Scotland GP practice data source — Public Health Scotland (NHS Scotland Open Data)."""
+"""Scotland GP practice source backed by NHS Scotland Open Data."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from ..normalise import normalize_name, normalize_postcode
 
 class ScotlandSource:
     """
-    Downloads and parses the NHS Scotland GP practice contact details CSV.
+    Discover, download, and parse the NHS Scotland GP practice contacts CSV.
 
     The CSV has headers; relevant columns:
       PracticeCode    → organisation_code

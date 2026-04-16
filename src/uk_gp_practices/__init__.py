@@ -1,4 +1,4 @@
-"""UK GP Practices ODS data handling."""
+"""Query cached UK GP practice records from supported public NHS sources."""
 
 from importlib.metadata import version, PackageNotFoundError
 

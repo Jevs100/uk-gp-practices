@@ -1,4 +1,4 @@
-"""Source protocol — each nation's data source implements this interface."""
+"""Protocol implemented by each downloadable GP practice data source."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from ..download import DownloadResult
 @runtime_checkable
 class Source(Protocol):
     """
-    A data source for GP practice records from a specific nation.
+    Download and parse GP practice records from one source/nation.
 
     Implementors must provide:
       - nation: identifier string (e.g. "england", "scotland", "northern_ireland")

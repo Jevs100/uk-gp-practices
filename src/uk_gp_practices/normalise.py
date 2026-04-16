@@ -1,4 +1,4 @@
-"""Tools for normalizing data for searching."""
+"""Normalization helpers used for deterministic search keys."""
 
 from __future__ import annotations
 

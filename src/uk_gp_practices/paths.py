@@ -1,4 +1,4 @@
-"""Paths for storing cached data and reports."""
+"""Cache paths for downloaded source CSVs and the SQLite database."""
 
 from __future__ import annotations
 
@@ -22,11 +22,11 @@ def cache_dir() -> Path:
 
 
 def db_path() -> Path:
-    """Default SQLite database path."""
+    """Return the default SQLite database path in the user cache directory."""
     return cache_dir() / "practices.sqlite3"
 
 
 def csv_path(report: str) -> Path:
-    """Path for storing a downloaded report CSV file."""
+    """Return a safe cache path for a downloaded source CSV."""
     safe = report.replace("/", "_").replace("\\", "_").replace("..", "_")
     return cache_dir() / f"{safe}.csv"

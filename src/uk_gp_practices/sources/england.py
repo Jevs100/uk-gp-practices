@@ -1,4 +1,4 @@
-"""England GP practice data source — NHS ODS Data Search & Export (epraccur report)."""
+"""England and Wales GP practice source backed by NHS ODS epraccur."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from ..normalise import normalize_name, normalize_postcode
 
 class EnglandSource:
     """
-    Downloads and parses the NHS ODS epraccur report for England (and Wales).
+    Download and parse the NHS ODS epraccur report for England and Wales.
 
     The epraccur CSV is headerless; columns are positional:
       0  = organisation_code

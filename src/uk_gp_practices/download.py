@@ -18,6 +18,8 @@ DEFAULT_DSE_REPORT_URLS = [
 
 @dataclass(frozen=True, slots=True)
 class DownloadResult:
+    """Metadata describing a completed source download."""
+
     report: str
     path: Path
     bytes_written: int
@@ -35,7 +37,7 @@ def download_report(
     """
     Download an NHS ODS Data Search & Export predefined report as a CSV.
 
-    on_progress: optional callback(bytes_downloaded, total_bytes_or_None)
+    on_progress: optional callback(bytes_downloaded, total_bytes_or_none)
 
     Override endpoint (single URL) with:
         UK_GP_PRACTICES_DSE_URL
@@ -96,9 +98,9 @@ def download_url(
     on_progress: Callable[[int, int | None], None] | None = None,
 ) -> DownloadResult:
     """
-    Download an arbitrary URL to dest.
+    Download an arbitrary CSV URL to a local destination path.
 
-    on_progress: optional callback(bytes_downloaded, total_bytes_or_None)
+    on_progress: optional callback(bytes_downloaded, total_bytes_or_none)
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     last_exc: Exception | None = None

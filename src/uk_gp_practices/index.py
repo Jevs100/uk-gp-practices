@@ -1,4 +1,4 @@
-"""Main interface for querying GP practice data."""
+"""Public query interface for cached UK GP practice data."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def _row_to_practice(row: sqlite3.Row) -> Practice:
 @dataclass(slots=True)
 class PracticeIndex:
     """
-    Main query interface for GP practice data.
+    Query and update a local SQLite index of GP practice records.
 
     Backed by:
       - downloaded source CSV files (one per nation)
@@ -94,7 +94,8 @@ class PracticeIndex:
         self, source: Source, max_age: timedelta = DEFAULT_MAX_AGE
     ) -> bool:
         """
-        Download + rebuild if the CSV is missing or older than max_age.
+        Download and ingest a source when its cached CSV is stale or missing.
+
         Returns True if an update happened.
         """
         csvf = csv_path(source.nation)
@@ -107,7 +108,7 @@ class PracticeIndex:
         return True
 
     def update(self, source: Source) -> None:
-        """Download a source CSV and upsert into SQLite."""
+        """Download one source CSV and upsert its rows into SQLite."""
         csvf = csv_path(source.nation)
         source.download(csvf)
         self.load_source(csvf, source=source)
@@ -119,7 +120,7 @@ class PracticeIndex:
         on_progress: Callable[[int, int], None] | None = None,
     ) -> int:
         """
-        Parse a local CSV via the given source and upsert into SQLite.
+        Parse a local source CSV and upsert its normalized rows into SQLite.
 
         on_progress: optional callback(rows_completed, total_rows)
         Returns the number of rows ingested.
@@ -137,7 +138,7 @@ class PracticeIndex:
         on_progress: Callable[[int, int], None] | None = None,
     ) -> int:
         """
-        Backward-compatible wrapper — loads an epraccur CSV using EnglandSource.
+        Load a local NHS ODS epraccur CSV using EnglandSource.
 
         Prefer load_source() for new code.
         """
@@ -166,7 +167,7 @@ class PracticeIndex:
         nation: str | None = None,
         limit: int = 25,
     ) -> list[Practice]:
-        """Search practices by name, postcode, town, and/or nation."""
+        """Search practices by name, postcode, town, status, and/or nation."""
         from .normalise import normalize_name, normalize_postcode
 
         clauses: list[str] = []

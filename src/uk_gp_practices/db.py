@@ -1,4 +1,4 @@
-"""Database access and manipulation."""
+"""SQLite schema, upsert helpers, and CSV readers."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ INDEXES_SQL = [
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
+    """Open a SQLite connection with pragmatic defaults for local caching."""
     con = sqlite3.connect(str(db_path))
     con.execute("PRAGMA journal_mode=WAL;")
     con.execute("PRAGMA synchronous=NORMAL;")
@@ -43,6 +44,7 @@ def _migrate(con: sqlite3.Connection) -> None:
 
 
 def init_db(con: sqlite3.Connection) -> None:
+    """Create or migrate the practices schema and indexes."""
     con.execute(PRACTICES_TABLE_SQL)
     for stmt in INDEXES_SQL:
         con.execute(stmt)
@@ -72,7 +74,7 @@ def upsert_practices(
     chunk_size: int = 500,
 ) -> None:
     """
-    Upsert practice rows into sqlite.
+    Upsert normalized practice rows into SQLite.
 
     Expected keys in each row:
       organisation_code, name, name_norm, postcode, postcode_norm, town, status, nation
@@ -109,12 +111,12 @@ def upsert_practices(
 
 
 def read_csv_dicts(path: Path) -> list[dict[str, str]]:
-    """Read a normal headered CSV into dict rows."""
+    """Read a headered UTF-8 CSV into dict rows."""
     with path.open("r", newline="", encoding="utf-8-sig") as f:
         return list(csv.DictReader(f))
 
 
 def read_csv_rows(path: Path) -> list[list[str]]:
-    """Read a CSV into raw rows (positional), for headerless exports."""
+    """Read a UTF-8 CSV into positional rows for headerless exports."""
     with path.open("r", newline="", encoding="utf-8-sig") as f:
         return list(csv.reader(f))
